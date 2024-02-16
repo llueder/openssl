@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 MTUNE=$1
 DIR=./libcrypto_${MTUNE}
