@@ -82,9 +82,9 @@ int aes_ccm_encrypt(void)
         OSSL_PARAM_END, OSSL_PARAM_END, OSSL_PARAM_END
     };
 
-    printf("AES CCM Encrypt:\n");
-    printf("Plaintext:\n");
-    BIO_dump_fp(stdout, ccm_pt, sizeof(ccm_pt));
+    // printf("AES CCM Encrypt:\n");
+    // printf("Plaintext:\n");
+    // BIO_dump_fp(stdout, ccm_pt, sizeof(ccm_pt));
 
     /* Create a context for the encrypt operation */
     if ((ctx = EVP_CIPHER_CTX_new()) == NULL)
@@ -125,8 +125,8 @@ int aes_ccm_encrypt(void)
         goto err;
 
     /* Output encrypted block */
-    printf("Ciphertext:\n");
-    BIO_dump_fp(stdout, outbuf, outlen);
+    // printf("Ciphertext:\n");
+    // BIO_dump_fp(stdout, outbuf, outlen);
 
     /* Finalise: note get no output for CCM */
     if (!EVP_EncryptFinal_ex(ctx, NULL, &tmplen))
@@ -141,8 +141,8 @@ int aes_ccm_encrypt(void)
         goto err;
 
     /* Output tag */
-    printf("Tag:\n");
-    BIO_dump_fp(stdout, outtag, ccm_tag_len);
+    // printf("Tag:\n");
+    // BIO_dump_fp(stdout, outtag, ccm_tag_len);
 
     ret = 1;
 err:
@@ -167,9 +167,9 @@ int aes_ccm_decrypt(void)
         OSSL_PARAM_END, OSSL_PARAM_END, OSSL_PARAM_END
     };
 
-    printf("AES CCM Decrypt:\n");
-    printf("Ciphertext:\n");
-    BIO_dump_fp(stdout, ccm_ct, sizeof(ccm_ct));
+    // printf("AES CCM Decrypt:\n");
+    // printf("Ciphertext:\n");
+    // BIO_dump_fp(stdout, ccm_ct, sizeof(ccm_ct));
 
     if ((ctx = EVP_CIPHER_CTX_new()) == NULL)
         goto err;
@@ -209,8 +209,8 @@ int aes_ccm_decrypt(void)
 
     /* Output decrypted block: if tag verify failed we get nothing */
     if (rv > 0) {
-        printf("Tag verify successful!\nPlaintext:\n");
-        BIO_dump_fp(stdout, outbuf, outlen);
+        // printf("Tag verify successful!\nPlaintext:\n");
+        // BIO_dump_fp(stdout, outbuf, outlen);
     } else {
         printf("Tag verify failed!\nPlaintext not available\n");
         goto err;
@@ -226,13 +226,17 @@ err:
     return ret;
 }
 
-int main(int argc, char **argv)
-{
-    if (!aes_ccm_encrypt())
-        return EXIT_FAILURE;
-
-    if (!aes_ccm_decrypt())
-        return EXIT_FAILURE;
-
-    return EXIT_SUCCESS;
+void prepare() {}
+void compute() {
+    aes_ccm_encrypt();
+    aes_ccm_decrypt();
 }
+void cleanup() {}
+
+// int main(int argc, char **argv)
+// {
+//    prepare();
+//    compute();
+//    cleanup();
+//    return 0;
+// }

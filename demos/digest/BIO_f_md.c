@@ -34,7 +34,9 @@
  * The default digest is SHA3-512
  */
 
-int main(int argc, char *argv[])
+void prepare() {}
+
+void compute()
 {
     int ret = EXIT_FAILURE;
     OSSL_LIB_CTX *library_context = NULL;
@@ -44,9 +46,10 @@ int main(int argc, char *argv[])
     unsigned char buffer[512];
     size_t digest_size;
     char *digest_value = NULL;
-    int j;
+    // int j;
 
-    input = BIO_new_fd(fileno(stdin), 1);
+    //input = BIO_new_fd(fileno(stdin), 1);
+    input = BIO_new_fd(fileno(fopen("input", "rb")), 1);
     if (input == NULL) {
         fprintf(stderr, "BIO_new_fd() for stdin returned NULL\n");
         goto cleanup;
@@ -59,7 +62,7 @@ int main(int argc, char *argv[])
 
     /*
      * Fetch a message digest by name
-     * The algorithm name is case insensitive. 
+     * The algorithm name is case insensitive.
      * See providers(7) for details about algorithm fetching
      */
     md = EVP_MD_fetch(library_context, "SHA3-512", NULL);
@@ -101,10 +104,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "BIO_gets(bio_digest) failed\n");
         goto cleanup;
     }
-    for (j = 0; j < digest_size; j++) {
-        fprintf(stdout, "%02x", (unsigned char)digest_value[j]);
-    }
-    fprintf(stdout, "\n");
+    // for (j = 0; j < digest_size; j++) {
+    //     fprintf(stdout, "%02x", (unsigned char)digest_value[j]);
+    // }
+    // fprintf(stdout, "\n");
     ret = EXIT_SUCCESS;
 
 cleanup:
@@ -117,5 +120,14 @@ cleanup:
     EVP_MD_free(md);
     OSSL_LIB_CTX_free(library_context);
 
-    return ret;
+    // return ret;
 }
+
+void cleanup() {}
+
+// int main(){
+//     prepare();
+//     compute();
+//     compute();
+//     cleanup();
+// }

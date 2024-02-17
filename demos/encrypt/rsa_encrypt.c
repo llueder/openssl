@@ -88,21 +88,25 @@ static void set_optional_params(OSSL_PARAM *p, const char *propq)
     *p = OSSL_PARAM_construct_end();
 }
 
-/*
- * The length of the input data that can be encrypted is limited by the
- * RSA key length minus some additional bytes that depends on the padding mode.
- *
- */
-static int do_encrypt(OSSL_LIB_CTX *libctx,
-                      const unsigned char *in, size_t in_len,
-                      unsigned char **out, size_t *out_len)
+
+
+
+
+size_t msg_len = sizeof(msg) - 1;
+OSSL_LIB_CTX *libctx = NULL;
+size_t encrypted_len = 0;
+unsigned char *encrypted = NULL;
+size_t decrypted_len = 0;
+unsigned char *decrypted = NULL;
+EVP_PKEY_CTX *pub_ctx = NULL;
+EVP_PKEY_CTX *priv_ctx = NULL;
+EVP_PKEY *pub_key = NULL;
+EVP_PKEY *priv_key = NULL;
+
+int prepare_encrypt()
 {
-    int ret = 0, public = 1;
-    size_t buf_len = 0;
-    unsigned char *buf = NULL;
+    int public = 1;
     const char *propq = NULL;
-    EVP_PKEY_CTX *ctx = NULL;
-    EVP_PKEY *pub_key = NULL;
     OSSL_PARAM params[5];
 
     /* Get public key */
@@ -111,56 +115,50 @@ static int do_encrypt(OSSL_LIB_CTX *libctx,
         fprintf(stderr, "Get public key failed.\n");
         goto cleanup;
     }
-    ctx = EVP_PKEY_CTX_new_from_pkey(libctx, pub_key, propq);
-    if (ctx == NULL) {
+    pub_ctx = EVP_PKEY_CTX_new_from_pkey(libctx, pub_key, propq);
+    if (pub_ctx == NULL) {
         fprintf(stderr, "EVP_PKEY_CTX_new_from_pkey() failed.\n");
         goto cleanup;
     }
+
     set_optional_params(params, propq);
     /* If no optional parameters are required then NULL can be passed */
-    if (EVP_PKEY_encrypt_init_ex(ctx, params) <= 0) {
+    if (EVP_PKEY_encrypt_init_ex(pub_ctx, params) <= 0) {
         fprintf(stderr, "EVP_PKEY_encrypt_init_ex() failed.\n");
         goto cleanup;
     }
     /* Calculate the size required to hold the encrypted data */
-    if (EVP_PKEY_encrypt(ctx, NULL, &buf_len, in, in_len) <= 0) {
+    if (EVP_PKEY_encrypt(pub_ctx, NULL, &encrypted_len, msg, msg_len) <= 0) {
         fprintf(stderr, "EVP_PKEY_encrypt() failed.\n");
         goto cleanup;
     }
-    buf = OPENSSL_zalloc(buf_len);
-    if (buf  == NULL) {
+    encrypted = OPENSSL_zalloc(encrypted_len);
+    if (encrypted  == NULL) {
         fprintf(stderr, "Malloc failed.\n");
         goto cleanup;
     }
-    if (EVP_PKEY_encrypt(ctx, buf, &buf_len, in, in_len) <= 0) {
-        fprintf(stderr, "EVP_PKEY_encrypt() failed.\n");
-        goto cleanup;
-    }
-    *out_len = buf_len;
-    *out = buf;
-    fprintf(stdout, "Encrypted:\n");
-    BIO_dump_indent_fp(stdout, buf, buf_len, 2);
-    fprintf(stdout, "\n");
-    ret = 1;
+
+    return 1;
 
 cleanup:
-    if (!ret)
-        OPENSSL_free(buf);
     EVP_PKEY_free(pub_key);
-    EVP_PKEY_CTX_free(ctx);
-    return ret;
+    EVP_PKEY_CTX_free(pub_ctx);
+    return 0;
 }
 
-static int do_decrypt(OSSL_LIB_CTX *libctx, const unsigned char *in, size_t in_len,
-                      unsigned char **out, size_t *out_len)
-{
-    int ret = 0, public = 0;
-    size_t buf_len = 0;
-    unsigned char *buf = NULL;
+int encrypt(){
+    if (EVP_PKEY_encrypt(pub_ctx, encrypted, &encrypted_len, msg, msg_len) <= 0) {
+        fprintf(stderr, "EVP_PKEY_encrypt() failed.\n");
+        return 0;
+    }
+    return 1;
+}
+
+OSSL_PARAM params[5];
+int prepare_decrypt(){
+    int public = 0;
     const char *propq = NULL;
-    EVP_PKEY_CTX *ctx = NULL;
-    EVP_PKEY *priv_key = NULL;
-    OSSL_PARAM params[5];
+    // OSSL_PARAM params[5];
 
     /* Get private key */
     priv_key = get_key(libctx, propq, public);
@@ -168,8 +166,8 @@ static int do_decrypt(OSSL_LIB_CTX *libctx, const unsigned char *in, size_t in_l
         fprintf(stderr, "Get private key failed.\n");
         goto cleanup;
     }
-    ctx = EVP_PKEY_CTX_new_from_pkey(libctx, priv_key, propq);
-    if (ctx == NULL) {
+    priv_ctx = EVP_PKEY_CTX_new_from_pkey(libctx, priv_key, propq);
+    if (priv_ctx == NULL) {
         fprintf(stderr, "EVP_PKEY_CTX_new_from_pkey() failed.\n");
         goto cleanup;
     }
@@ -177,67 +175,64 @@ static int do_decrypt(OSSL_LIB_CTX *libctx, const unsigned char *in, size_t in_l
     /* The parameters used for encryption must also be used for decryption */
     set_optional_params(params, propq);
     /* If no optional parameters are required then NULL can be passed */
-    if (EVP_PKEY_decrypt_init_ex(ctx, params) <= 0) {
+    if (EVP_PKEY_decrypt_init_ex(priv_ctx, params) <= 0) {
         fprintf(stderr, "EVP_PKEY_decrypt_init_ex() failed.\n");
         goto cleanup;
     }
     /* Calculate the size required to hold the decrypted data */
-    if (EVP_PKEY_decrypt(ctx, NULL, &buf_len, in, in_len) <= 0) {
+    if (EVP_PKEY_decrypt(priv_ctx, NULL, &decrypted_len, encrypted, encrypted_len) <= 0) {
         fprintf(stderr, "EVP_PKEY_decrypt() failed.\n");
         goto cleanup;
     }
-    buf = OPENSSL_zalloc(buf_len);
-    if (buf == NULL) {
-        fprintf(stderr, "Malloc failed.\n");
-        goto cleanup;
+    decrypted = OPENSSL_zalloc(decrypted_len);
+    if (decrypted == NULL) {
+         fprintf(stderr, "Malloc failed.\n");
+         goto cleanup;
     }
-    if (EVP_PKEY_decrypt(ctx, buf, &buf_len, in, in_len) <= 0) {
-        fprintf(stderr, "EVP_PKEY_decrypt() failed.\n");
-        goto cleanup;
-    }
-    *out_len = buf_len;
-    *out = buf;
-    fprintf(stdout, "Decrypted:\n");
-    BIO_dump_indent_fp(stdout, buf, buf_len, 2);
-    fprintf(stdout, "\n");
-    ret = 1;
+
+    return 1;
 
 cleanup:
-    if (!ret)
-        OPENSSL_free(buf);
     EVP_PKEY_free(priv_key);
-    EVP_PKEY_CTX_free(ctx);
-    return ret;
+    EVP_PKEY_CTX_free(priv_ctx);
+    return 0;
 }
 
-int main(void)
-{
-    int ret = EXIT_FAILURE;
-    size_t msg_len = sizeof(msg) - 1;
-    size_t encrypted_len = 0, decrypted_len = 0;
-    unsigned char *encrypted = NULL, *decrypted = NULL;
-    OSSL_LIB_CTX *libctx = NULL;
+int decrypt(){
+    /* Calculate the size required to hold the decrypted data */
+    if (EVP_PKEY_decrypt(priv_ctx, NULL, &decrypted_len, encrypted, encrypted_len) <= 0) {
+        fprintf(stderr, "EVP_PKEY_decrypt() failed.\n");
+        goto cleanup;
+    }
 
-    if (!do_encrypt(libctx, msg, msg_len, &encrypted, &encrypted_len)) {
-        fprintf(stderr, "encryption failed.\n");
-        goto cleanup;
+    if (EVP_PKEY_decrypt(priv_ctx, decrypted, &decrypted_len, encrypted, encrypted_len) <= 0) {
+        fprintf(stderr, "EVP_PKEY_decrypt() failed.\n");
+        return 0;
     }
-    if (!do_decrypt(libctx, encrypted, encrypted_len,
-                    &decrypted, &decrypted_len)) {
-        fprintf(stderr, "decryption failed.\n");
-        goto cleanup;
-    }
-    if (CRYPTO_memcmp(msg, decrypted, decrypted_len) != 0) {
-        fprintf(stderr, "Decrypted data does not match expected value\n");
-        goto cleanup;
-    }
-    ret = EXIT_SUCCESS;
-
-cleanup:
-    OPENSSL_free(decrypted);
-    OPENSSL_free(encrypted);
-    OSSL_LIB_CTX_free(libctx);
-    if (ret != EXIT_SUCCESS)
-        ERR_print_errors_fp(stderr);
-    return ret;
+    return 1;
+    cleanup:
+    return 0;
 }
+
+void prepare(){
+    prepare_encrypt();
+    prepare_decrypt();
+}
+
+void compute(){
+    encrypt();
+    // printf("0x%p: \n", encrypted);
+    // printf("0x%hhx 0x%hhx 0x%hhx\n", encrypted[0], encrypted[1], encrypted[2]);
+    decrypt();
+    // printf("0x%hhx 0x%hhx 0x%hhx\n", decrypted[0], decrypted[1], decrypted[2]);
+    // fprintf(stdout, "%s\n", decrypted);
+}
+
+void cleanup(){
+    // EVP_PKEY_free(pub_key);
+    // EVP_PKEY_CTX_free(pub_ctx);
+    // EVP_PKEY_free(priv_key);
+    // EVP_PKEY_CTX_free(priv_ctx);
+}
+
+// int main(){prepare();compute();compute();cleanup();return 0;}
